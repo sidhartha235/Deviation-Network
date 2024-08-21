@@ -68,17 +68,22 @@ def dev_network_linear(input_shape):
     intermediate = Dense(1, activation='linear',  name = 'score')(x_input)
     return Model(x_input, intermediate)
 
-def deviation_loss(y_true, y_pred):
+ref = tf.Variable(np.random.normal(loc=0., scale=1.0, size=5000), dtype=tf.float32)
+def deviation_loss(y_true, y_pred, ref):
     '''
     z-score-based deviation loss
     '''    
     confidence_margin = 5.     
     ## size=5000 is the setting of l in algorithm 1 in the paper
-    ref = K.variable(np.random.normal(loc = 0., scale= 1.0, size = 5000) , dtype='float32')
-    dev = (y_pred - K.mean(ref)) / K.std(ref)
-    inlier_loss = K.abs(dev) 
-    outlier_loss = K.abs(K.maximum(confidence_margin - dev, 0.))
-    return K.mean((1 - y_true) * inlier_loss + y_true * outlier_loss)
+    # ref = K.variable(np.random.normal(loc = 0., scale= 1.0, size = 5000) , dtype='float32')
+    # dev = (y_pred - K.mean(ref)) / K.std(ref)
+    # inlier_loss = K.abs(dev) 
+    # outlier_loss = K.abs(K.maximum(confidence_margin - dev, 0.))
+    # return K.mean((1 - y_true) * inlier_loss + y_true * outlier_loss)
+    dev = (y_pred - tf.reduce_mean(ref)) / tf.math.reduce_std(ref)
+    inlier_loss = tf.abs(dev)
+    outlier_loss = tf.abs(tf.maximum(confidence_margin - dev, 0.0))
+    return tf.reduce_mean((1 - y_true) * inlier_loss + y_true * outlier_loss)
 
 
 def deviation_network(input_shape, network_depth):
@@ -94,7 +99,7 @@ def deviation_network(input_shape, network_depth):
     else:
         sys.exit("The network depth is not set properly")
     rms = RMSprop(clipnorm=1.)
-    model.compile(loss=deviation_loss, optimizer=rms)
+    model.compile(loss=lambda y_true, y_pred: deviation_loss(y_true, y_pred, ref), optimizer=rms)
     return model
 
 
@@ -304,11 +309,11 @@ def run_devnet(args):
             nb_batch = args.nb_batch  
             model = deviation_network(input_shape, network_depth)
             print(model.summary())  
-            model_name = "./model/devnet_"  + filename + "_" + str(args.cont_rate) + "cr_"  + str(args.batch_size) +"bs_" + str(args.known_outliers) + "ko_" + str(network_depth) +"d.h5"
+            model_name = "./model/devnet_"  + filename + "_" + str(args.cont_rate) + "cr_"  + str(args.batch_size) +"bs_" + str(args.known_outliers) + "ko_" + str(network_depth) +"d.weights.h5"
             checkpointer = ModelCheckpoint(model_name, monitor='loss', verbose=0,
                                            save_best_only = True, save_weights_only = True)            
             
-            model.fit_generator(batch_generator_sup(x_train, outlier_indices, inlier_indices, batch_size, nb_batch, rng),
+            model.fit(batch_generator_sup(x_train, outlier_indices, inlier_indices, batch_size, nb_batch, rng),
                                           steps_per_epoch = nb_batch,
                                           epochs = epochs,
                                           callbacks=[checkpointer])   
