@@ -104,3 +104,14 @@ def writeResults(name, n_samples, dim, n_samples_trn, n_outliers_trn, n_outliers
     row = name + "," + str(n_samples)+ ","  + str(dim) + ',' + str(n_samples_trn) + ','+ str(n_outliers_trn) + ','+ str(n_outliers)  + ',' + str(depth)+ "," + str(rauc) +"," + str(std_auc) + "," + str(ap) +"," + str(std_ap)+"," + str(train_time)+"," + str(test_time) + "\n"
     csv_file.write(row)
 
+    print(f"Dataset: {name}")
+    print(f"Number of samples: {n_samples}")
+    print(f"Dimensions: {dim}")
+    print(f"Training samples: {n_samples_trn}")
+    print(f"Outliers in training: {n_outliers_trn}")
+    print(f"Outliers: {n_outliers}")
+    print(f"Depth: {depth}")
+    print(f"ROC AUC: {rauc} (± {std_auc})")
+    print(f"Average Precision: {ap} (± {std_ap})")
+    print(f"Training time: {train_time}s")
+    print(f"Testing time: {test_time}s")
