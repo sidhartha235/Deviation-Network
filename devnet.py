@@ -234,7 +234,7 @@ def inject_noise(seed, n_out, random_seed):
 
 def run_devnet(args):
     names = args.data_set.split(',')
-    names = ['annthyroid_21feat_normalised']
+    names = ['UNSW_NB15_traintest_backdoor']
     network_depth = int(args.network_depth)
     random_seed = args.ramdn_seed
     for nm in names:
