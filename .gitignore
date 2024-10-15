@@ -2,7 +2,7 @@ __pycache__/
 env/
 model/
 results.csv
-results/
+# results/
 UNSW_NB15_traintest_backdoor.csv
 creditcardfraud_normalised.csv
 census-income-full-mixed-binarized.csv

@@ -2,7 +2,7 @@ import csv
 import scipy.stats as stats
 
 iForest_result = 'results/auc_performance_cl0.5.csv'
-devnet_result = 'result_kfold.csv'
+devnet_result = 'results/result_kfold.csv'
 
 with open(iForest_result, 'r') as f:
     reader = csv.reader(f)
