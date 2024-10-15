@@ -29,10 +29,10 @@ def writeResults(name, n_samples, dim, n_samples_trn, n_outliers_trn, n_outliers
 # from utils import dataLoading, aucPerformance, writeResults
 
 # Load your dataset (modify the path to your dataset)
-X, labels = dataLoading(".dataset//annthyroid_21feat_normalised.csv")
+X, labels = dataLoading("dataset/UNSW_NB15_traintest_backdoor.csv")
 
 # Initialize the Isolation Forest
-iso_forest = IsolationForest(n_estimators=100, max_samples='auto', contamination='auto', random_state=42)
+iso_forest = IsolationForest(n_estimators=100, max_samples='auto', contamination='auto')
 
 # Train the Isolation Forest
 start_train_time = time.time()
