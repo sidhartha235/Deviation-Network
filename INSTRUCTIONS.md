@@ -1,5 +1,11 @@
 ## Instructions to run the devnet model
 
+* Software versions used:
+```
+python -> 3.11.6
+pip -> 23.2.1
+```
+
 * Create a virtual environment:
 ```
 python -m venv env
