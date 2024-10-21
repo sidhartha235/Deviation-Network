@@ -226,7 +226,7 @@ def inject_noise(seed, n_out, random_seed):
 
 def run_devnet(args):
     names = args.data_set.split(',')
-    names = ['UNSW_NB15_traintest_backdoor']
+    # names = ['']
     network_depth = int(args.network_depth)
     random_seed = args.ramdn_seed
     k_folds = args.k_folds
