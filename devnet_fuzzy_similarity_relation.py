@@ -1,13 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-@author: Guansong Pang
-The algorithm was implemented using Python 3.6.6, Keras 2.2.2 and TensorFlow 1.10.1.
-More details can be found in our KDD19 paper.
-Guansong Pang, Chunhua Shen, and Anton van den Hengel. 2019. 
-Deep Anomaly Detection with Deviation Networks. 
-In The 25th ACM SIGKDDConference on Knowledge Discovery and Data Mining (KDD ’19),
-August4–8, 2019, Anchorage, AK, USA.ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3292500.3330871
-"""
+## -> represents changes made from devnet.py to use Fuzzy Similarity Relation
 
 import numpy as np
 np.random.seed(42)
@@ -20,7 +11,7 @@ from keras import backend as K
 from keras.models import Model, load_model
 from keras.layers import Input, Dense
 from keras.optimizers import RMSprop
-from keras.callbacks import ModelCheckpoint, TensorBoard
+from keras.callbacks import ModelCheckpoint, TensorBoard, Callback
 
 import argparse
 import numpy as np
@@ -69,18 +60,22 @@ def dev_network_linear(input_shape):
     return Model(x_input, intermediate)
 
 ref = tf.Variable(np.random.normal(loc=0., scale=1.0, size=5000), dtype=tf.float32)
-def deviation_loss(y_true, y_pred, ref):
+## modified loss function
+def deviation_loss_using_fuzzy_similarity_relation(y_true, y_pred, ref):
     '''
     z-score-based deviation loss
     '''    
     confidence_margin = 5.     
-    ## size=5000 is the setting of l in algorithm 1 in the paper
-    # ref = K.variable(np.random.normal(loc = 0., scale= 1.0, size = 5000) , dtype='float32')
-    # dev = (y_pred - K.mean(ref)) / K.std(ref)
-    # inlier_loss = K.abs(dev) 
-    # outlier_loss = K.abs(K.maximum(confidence_margin - dev, 0.))
-    # return K.mean((1 - y_true) * inlier_loss + y_true * outlier_loss)
-    dev = (y_pred - tf.reduce_mean(ref)) / tf.math.reduce_std(ref)
+
+    # dev = (y_pred - tf.reduce_mean(ref)) / tf.math.reduce_std(ref)
+ ## New Fuzzy Similarity Relation
+    mean_ref = tf.reduce_mean(ref)
+    variance_ref = tf.math.reduce_variance(ref)
+
+    # Dki: Distance from y_pred to class mean (mean_ref), normalized by variance (variance_ref)
+    Dki = (y_pred - mean_ref) ** 2 / variance_ref
+
+    dev = Dki
     inlier_loss = tf.abs(dev)
     outlier_loss = tf.abs(tf.maximum(confidence_margin - dev, 0.0))
     return tf.reduce_mean((1 - y_true) * inlier_loss + y_true * outlier_loss)
@@ -99,7 +94,7 @@ def deviation_network(input_shape, network_depth):
     else:
         sys.exit("The network depth is not set properly")
     rms = RMSprop(clipnorm=1.)
-    model.compile(loss=lambda y_true, y_pred: deviation_loss(y_true, y_pred, ref), optimizer=rms)
+    model.compile(loss=lambda y_true, y_pred: deviation_loss_using_fuzzy_similarity_relation(y_true, y_pred, ref), optimizer=rms)
     return model
 
 
@@ -316,7 +311,24 @@ def run_devnet(args):
             model.fit(batch_generator_sup(x_train, outlier_indices, inlier_indices, batch_size, nb_batch, rng),
                                           steps_per_epoch = nb_batch,
                                           epochs = epochs,
-                                          callbacks=[checkpointer])   
+                                          callbacks=[checkpointer])
+            
+            ## After training, calculate and display Distance, Membership, and Influence values
+            y_pred_train = model.predict(x_train)  # Get predictions for the entire training set
+            mean_ref = tf.reduce_mean(ref)
+            variance_ref = tf.math.reduce_variance(ref)
+            
+            Dki = (y_pred_train - mean_ref) ** 2 / variance_ref
+            Mki = 1 / (1 + tf.exp(Dki * 2.5))  # Assuming w1 is 2.5
+            numerator = tf.reduce_sum((y_pred_train - mean_ref) ** 2 * tf.exp(Mki * 2.5))
+            denominator = tf.reduce_sum(tf.exp(Mki * 2.5))
+            lambda_k = numerator / denominator
+            
+            print(f"After training for round {i}:")
+            print(f"Distance (Dki): {Dki.numpy()}")
+            print(f"Membership (Mki): {Mki.numpy()}")
+            print(f"Influence (lambda_k): {lambda_k.numpy()}")
+
             train_time += time.time() - start_time
             
             start_time = time.time() 
