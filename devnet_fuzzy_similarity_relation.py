@@ -72,13 +72,38 @@ def deviation_loss_using_fuzzy_similarity_relation(y_true, y_pred, ref):
     mean_ref = tf.reduce_mean(ref)
     variance_ref = tf.math.reduce_variance(ref)
 
-    # Dki: Distance from y_pred to class mean (mean_ref), normalized by variance (variance_ref)
-    Dki = (y_pred - mean_ref) ** 2 / variance_ref
+    # Split predictions into normal data and anomalies based on y_true labels
+    y_pred_normal = tf.boolean_mask(y_pred, y_true == 0)  # Normal data predictions
+    y_pred_anomalies = tf.boolean_mask(y_pred, y_true == 1)  # Anomalies predictions
 
-    dev = Dki
-    inlier_loss = tf.abs(dev)
-    outlier_loss = tf.abs(tf.maximum(confidence_margin - dev, 0.0))
-    return tf.reduce_mean((1 - y_true) * inlier_loss + y_true * outlier_loss)
+    # Step 1: Compute Dki, Mki, and λ_k for Normal Data (inliers)
+    Dki_normal = (y_pred_normal - mean_ref) ** 2 / variance_ref
+    Mki_normal = 1 / (1 + tf.exp(Dki_normal * 2.5))  # Assuming w1 is 2.5
+    numerator_normal = tf.reduce_sum((y_pred_normal - mean_ref) ** 2 * tf.exp(Mki_normal * 2.5))
+    denominator_normal = tf.reduce_sum(tf.exp(Mki_normal * 2.5))
+    lambda_k_normal = numerator_normal / denominator_normal
+
+    # Step 2: Compute Dki, Mki, and λ_k for Anomalies (outliers)
+    Dki_anomalies = (y_pred_anomalies - mean_ref) ** 2 / variance_ref
+    Mki_anomalies = 1 / (1 + tf.exp(Dki_anomalies * 2.5))  # Assuming w1 is 2.5
+    numerator_anomalies = tf.reduce_sum((y_pred_anomalies - mean_ref) ** 2 * tf.exp(Mki_anomalies * 2.5))
+    denominator_anomalies = tf.reduce_sum(tf.exp(Mki_anomalies * 2.5))
+    lambda_k_anomalies = numerator_anomalies / denominator_anomalies
+
+    # Step 3: Calculate deviation (dev) for both classes separately
+    dev_normal = lambda_k_normal * ((y_pred_normal - mean_ref) / tf.math.reduce_std(ref))
+    dev_anomalies = lambda_k_anomalies * ((y_pred_anomalies - mean_ref) / tf.math.reduce_std(ref))
+
+    # Step 4: Calculate inlier loss and outlier loss
+    inlier_loss_normal = tf.abs(dev_normal)
+    outlier_loss_anomalies = tf.abs(tf.maximum(confidence_margin - dev_anomalies, 0.0))
+
+    # Combine the losses back into a single loss value
+    normal_loss = (1 - tf.boolean_mask(y_true, y_true == 0)) * inlier_loss_normal
+    anomaly_loss = tf.boolean_mask(y_true, y_true == 1) * outlier_loss_anomalies
+
+    total_loss = tf.reduce_mean(normal_loss) + tf.reduce_mean(anomaly_loss)
+    return total_loss
 
 
 def deviation_network(input_shape, network_depth):
@@ -288,63 +313,95 @@ def run_devnet(args):
                 x_train = vstack([x_train, noises])
                 y_train = np.append(y_train, np.zeros((noises.shape[0], 1)))
             
+            # Output shape updates
             outlier_indices = np.where(y_train == 1)[0]
             inlier_indices = np.where(y_train == 0)[0]
-            print(y_train.shape[0], outlier_indices.shape[0], inlier_indices.shape[0], n_noise)
-            input_shape = x_train.shape[1:]
-            n_samples_trn = x_train.shape[0]
-            n_outliers = len(outlier_indices)            
-            print("Training data size: %d, No. outliers: %d" % (x_train.shape[0], n_outliers))
+            print(f"Updated training data size: {x_train.shape[0]}, No. outliers: {len(outlier_indices)}, No. inliers: {len(inlier_indices)}, No. noise injected: {n_noise}")
             
-            
-            start_time = time.time() 
             input_shape = x_train.shape[1:]
             epochs = args.epochs
-            batch_size = args.batch_size    
-            nb_batch = args.nb_batch  
+            batch_size = args.batch_size
+            nb_batch = args.nb_batch
+            n_samples_trn = x_train.shape[0]
+            
+            # Initialize and summarize the model
             model = deviation_network(input_shape, network_depth)
-            print(model.summary())  
-            model_name = "./model/devnet_"  + filename + "_" + str(args.cont_rate) + "cr_"  + str(args.batch_size) +"bs_" + str(args.known_outliers) + "ko_" + str(network_depth) +"d.weights.h5"
-            checkpointer = ModelCheckpoint(model_name, monitor='loss', verbose=0,
-                                           save_best_only = True, save_weights_only = True)            
+            print(model.summary())
+            model_name = f"./model/devnet_{filename}_{args.cont_rate}cr_{args.batch_size}bs_{args.known_outliers}ko_{network_depth}d.weights.h5"
             
+            checkpointer = ModelCheckpoint(model_name, monitor='loss', verbose=0, save_best_only=True, save_weights_only=True)
+            
+            # Train the model and track time
+            start_time = time.time()
             model.fit(batch_generator_sup(x_train, outlier_indices, inlier_indices, batch_size, nb_batch, rng),
-                                          steps_per_epoch = nb_batch,
-                                          epochs = epochs,
-                                          callbacks=[checkpointer])
+                      steps_per_epoch=nb_batch, epochs=epochs, callbacks=[checkpointer])
             
-            ## After training, calculate and display Distance, Membership, and Influence values
-            y_pred_train = model.predict(x_train)  # Get predictions for the entire training set
+            # Get predictions
+            y_pred_train = model.predict(x_train)
+
+            # Separate normal and anomalous data
+            normal_indices = np.where(y_train == 0)[0]
+            anomalous_indices = np.where(y_train == 1)[0]
+            normal_preds = y_pred_train[normal_indices]
+            anomalous_preds = y_pred_train[anomalous_indices]
+
+            # Calculate metrics for normal data
             mean_ref = tf.reduce_mean(ref)
             variance_ref = tf.math.reduce_variance(ref)
-            
-            Dki = (y_pred_train - mean_ref) ** 2 / variance_ref
-            Mki = 1 / (1 + tf.exp(Dki * 2.5))  # Assuming w1 is 2.5
-            numerator = tf.reduce_sum((y_pred_train - mean_ref) ** 2 * tf.exp(Mki * 2.5))
-            denominator = tf.reduce_sum(tf.exp(Mki * 2.5))
-            lambda_k = numerator / denominator
-            
-            print(f"After training for round {i}:")
-            print(f"Distance (Dki): {Dki.numpy()}")
-            print(f"Membership (Mki): {Mki.numpy()}")
-            print(f"Influence (lambda_k): {lambda_k.numpy()}")
 
+            # Normal Data Metrics
+            Dki_normal = (normal_preds - mean_ref) ** 2 / variance_ref
+            Mki_normal = 1 / (1 + tf.exp(Dki_normal * 2.5))
+            numerator_normal = tf.reduce_sum((normal_preds - mean_ref) ** 2 * tf.exp(Mki_normal * 2.5))
+            denominator_normal = tf.reduce_sum(tf.exp(Mki_normal * 2.5))
+            lambda_k_normal = numerator_normal / denominator_normal
+
+            # Anomalous Data Metrics
+            Dki_anomalous = (anomalous_preds - mean_ref) ** 2 / variance_ref
+            Mki_anomalous = 1 / (1 + tf.exp(Dki_anomalous * 2.5))
+            numerator_anomalous = tf.reduce_sum((anomalous_preds - mean_ref) ** 2 * tf.exp(Mki_anomalous * 2.5))
+            denominator_anomalous = tf.reduce_sum(tf.exp(Mki_anomalous * 2.5))
+            lambda_k_anomalous = numerator_anomalous / denominator_anomalous
+
+            # Print separate values for normal and anomalous data
+            print(f"\nNormal Data (y_train == 0) Metrics for round {i}:")
+            print(f"Distance (Dki): {Dki_normal.numpy()}")
+            print(f"Dki size: {Dki_normal.shape[0]}")
+            print(f"Membership (Mki): {Mki_normal.numpy()}")
+            print(f"Mki size: {Mki_normal.shape[0]}")
+            print(f"Influence (lambda_k): {lambda_k_normal.numpy()}")
+
+            print(f"\nAnomalous Data (y_train == 1) Metrics for round {i}:")
+            print(f"Distance (Dki): {Dki_anomalous.numpy()}")
+            print(f"Dki size: {Dki_anomalous.shape[0]}")
+            print(f"Membership (Mki): {Mki_anomalous.numpy()}")
+            print(f"Mki size: {Mki_anomalous.shape[0]}")
+            print(f"Influence (lambda_k): {lambda_k_anomalous.numpy()}")
+            
             train_time += time.time() - start_time
             
-            start_time = time.time() 
+            # Test time tracking and performance evaluation
+            start_time = time.time()
             scores = load_model_weight_predict(model_name, input_shape, network_depth, x_test)
             test_time += time.time() - start_time
-            rauc[i], ap[i] = aucPerformance(scores, y_test)     
+            
+            # Evaluate AUC performance
+            rauc[i], ap[i] = aucPerformance(scores, y_test)
         
+        # Final summary per dataset
         mean_auc = np.mean(rauc)
         std_auc = np.std(rauc)
         mean_aucpr = np.mean(ap)
         std_aucpr = np.std(ap)
-        train_time = train_time/runs
-        test_time = test_time/runs
-        print("average AUC-ROC: %.4f, average AUC-PR: %.4f" % (mean_auc, mean_aucpr))    
-        print("average runtime: %.4f seconds" % (train_time + test_time))
-        writeResults(filename+'_'+str(network_depth), x.shape[0], x.shape[1], n_samples_trn, n_outliers_org, n_outliers,
+        train_time /= runs
+        test_time /= runs
+        
+        print(f"Dataset: {filename}, Depth: {network_depth}")
+        print(f"Average AUC-ROC: {mean_auc:.4f}, Average AUC-PR: {mean_aucpr:.4f}")
+        print(f"Average runtime: {train_time + test_time:.4f} seconds")
+        
+        # Save results
+        writeResults(f"{filename}_{network_depth}", x.shape[0], x.shape[1], n_samples_trn, n_outliers_org, n_outliers,
                      network_depth, mean_auc, mean_aucpr, std_auc, std_aucpr, train_time, test_time, path=args.output)
 
 
