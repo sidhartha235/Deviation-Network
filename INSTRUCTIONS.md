@@ -6,6 +6,8 @@ python -> 3.11.6
 pip -> 23.2.1
 ```
 
+#### Note : Use python3 instead of python in below specified commands for unix/linux environments
+
 * Create a virtual environment:
 ```
 python -m venv env
@@ -36,8 +38,23 @@ python devnet_kfold.py --network_depth=2 --known_outliers=30 --cont_rate=0.02 --
 python devnet_fuzzy_similarity_relation.py --network_depth=2 --runs=3 --known_outliers=30 --cont_rate=0.02 --data_format=0 --output=./results/result_fuzzy_similarity.csv --data_set=UNSW_NB15_traintest_backdoor --epochs=20
 ```
 
+* To run the iForest model,use the command
+```
+python iForest.py
+```
+
 * To get plots of AUC-ROC & AUC-PR and Training & Testing times:
+* Run your dataset multiple times to get a nice graph for the above.
 ```
 python plot.py
 ```
-* Run your dataset multiple times to get a nice graph for the above.
+
+* To run t-test for the AUC-ROC and Precision recall results using DevNet and Iforest , run both the models to get the results and the use
+```
+python tTest.py
+```
+
+* To run the wilconxon signed rank test for the AUC-ROC and Precision recall results using DevNet and Iforest , run both the models to get the results and the use
+```
+python wilcoxon_signed_rank_test.py
+```
