@@ -6,7 +6,7 @@ columns = ['name', 'n_samples', 'dim', 'n_samples_trn', 'n_outliers_trn', 'n_out
            'rauc', 'std_auc', 'ap', 'std_ap', 'train_time', 'test_time']
 
 # Load the CSV file
-file_path = 'results/result.csv'
+file_path = 'results/result_kfold.csv'
 df = pd.read_csv(file_path, names=columns)
 
 # Plot ROC AUC and Average Precision

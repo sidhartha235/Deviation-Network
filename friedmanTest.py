@@ -1,13 +1,14 @@
 import csv
 import numpy as np
+from scipy.stats import chi2
 
 def friedman_test(*args):
     """
     Perform the Friedman test on the provided data.
-    
+
     Args:
         *args: multiple lists of related samples
-    
+
     Returns:
         test_statistic: The test statistic for the Friedman test
         p_value: The p-value for the Friedman test
@@ -15,38 +16,29 @@ def friedman_test(*args):
     # Number of groups (k) and number of subjects (n)
     k = len(args)  # number of groups
     n = len(args[0])  # number of subjects (assuming all groups have the same number of subjects)
-    
-    # Step 1: Rank the data
+
+    # Step 1: Rank the data for each subject (each row)
     ranks = np.zeros((n, k))
     for i in range(n):
-        ranks[i] = np.argsort(np.argsort([args[j][i] for j in range(k)])) + 1
+        ranks[i] = np.argsort(np.argsort([-args[j][i] for j in range(k)])) + 1  # Rank in descending order
 
     # Step 2: Calculate the sums of ranks for each group
     sum_ranks = np.sum(ranks, axis=0)
-    
+
     # Step 3: Calculate the Friedman test statistic
     friedman_statistic = (12 / (n * k * (k + 1))) * np.sum(sum_ranks**2) - 3 * n * (k + 1)
-    
+
     # Step 4: Calculate the degrees of freedom
     df = k - 1
-    
+
     # Step 5: Calculate the p-value using the chi-squared distribution
-    p_value = 1 - chi_square_cdf(friedman_statistic, df)
-    
+    p_value = 1 - chi2.cdf(friedman_statistic, df)
+
     return friedman_statistic, p_value
 
-def chi_square_cdf(x, df):
-    """
-    Calculate the cumulative distribution function for the chi-squared distribution.
-    This is a simple implementation of the CDF for a chi-squared distribution.
-    """
-    from scipy.special import gammainc, gamma
-    
-    return gammainc(df / 2, x / 2)  # Using scipy for CDF calculation
-
 # File paths
-iForest_result = 'results/iForest_thyroid.csv'
-devnet_result = 'results/result_devnet_kfold.csv'
+iForest_result = 'results/auc_performance_cl0.5.csv'
+devnet_result = 'results/result_kfold.csv'
 
 # Reading iForest data
 with open(iForest_result, 'r') as f:
