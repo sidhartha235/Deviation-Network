@@ -23,8 +23,8 @@ def calculate_ttest(devnet_data, iForest_data):
     return t_statistic, degrees_of_freedom
 
 # File paths
-iForest_result = 'results/iForest_thyroid.csv'
-devnet_result = 'results/result_devnet_kfold.csv'
+iForest_result = 'results/auc_performance_cl0.5.csv'
+devnet_result = 'results/result_kfold.csv'
 
 # Reading iForest data
 with open(iForest_result, 'r') as f:
@@ -57,5 +57,6 @@ t_auc, df_auc = calculate_ttest(devnet_auc, iForest_auc)
 t_precision, df_precision = calculate_ttest(devnet_precision, iForest_precision)
 
 # Print results
-print(f"AUC T-Test: t-statistic = {t_auc}, degrees of freedom = {df_auc}")
-print(f"Precision T-Test: t-statistic = {t_precision}, degrees of freedom = {df_precision}")
+print("UNSW_NB15 - dataset:")
+print(f"\tAUC T-Test: t-statistic = {t_auc}")
+print(f"\tPrecision T-Test: t-statistic = {t_precision}")

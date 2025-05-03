@@ -59,10 +59,12 @@ def wilcoxon_signed_rank_test(data1, data2):
     
     return z_value, p_value, W_pos, W_neg
 
+print("UNSW_NB15 - dataset:")
+
 # Perform the Wilcoxon signed-rank test and calculate z-values for AUC
 z_auc, p_auc, W_pos_auc, W_neg_auc = wilcoxon_signed_rank_test(devnet_auc, iForest_auc)
-print(f"AUC Wilcoxon Test: z-value = {z_auc}, p-value = {p_auc}, W+ = {W_pos_auc}, W- = {W_neg_auc}")
+print(f"\tAUC Wilcoxon Test: z-value = {z_auc}, T+ = {W_pos_auc}, T- = {W_neg_auc}")
 
 # Perform the Wilcoxon signed-rank test and calculate z-values for Precision
 z_precision, p_precision, W_pos_precision, W_neg_precision = wilcoxon_signed_rank_test(devnet_precision, iForest_precision)
-print(f"Precision Wilcoxon Test: z-value = {z_precision}, p-value = {p_precision}, W+ = {W_pos_precision}, W- = {W_neg_precision}")
+print(f"\tPrecision Wilcoxon Test: z-value = {z_precision}, T+ = {W_pos_precision}, T- = {W_neg_precision}")
